@@ -22,13 +22,29 @@
  THE SOFTWARE.
  ****************************************************************************/
 
+
+#include <string>
 #include "AppDelegate.h"
-#include "cocos2d.h"
 
-USING_NS_CC;
-
-int main(int argc, char *argv[])
+@interface AppController : NSObject <NSApplicationDelegate, NSWindowDelegate>
 {
-    AppDelegate app;
-    return Application::getInstance()->run();
+    NSWindow *window;
+    NSMenu *menu;
+    NSFileHandle *fileHandle;
+    //console pipe
+    NSPipe *pipe;
+    NSFileHandle *pipeReadHandle;
 }
+
+@property (nonatomic, assign) IBOutlet NSMenu* menu;
+
+
+
+- (IBAction) onFileClose:(id)sender;
+- (IBAction) onScreenPortait:(id)sender;
+- (IBAction) onScreenLandscape:(id)sender;
+- (IBAction) onScreenZoomOut:(id)sender;
+- (IBAction) onReloadScript:(id)sender;
+
+
+@end

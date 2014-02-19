@@ -17,3 +17,7 @@ vector<string> getSearchPath()
 	searchPathArray.push_back(getJsSearchPath());
 	return searchPathArray;
 }
+
+string getIPAddress()
+{
+}

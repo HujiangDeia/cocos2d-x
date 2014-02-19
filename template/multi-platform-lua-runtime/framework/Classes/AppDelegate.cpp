@@ -2,6 +2,7 @@
 #include "CCLuaEngine.h"
 #include "SimpleAudioEngine.h"
 #include "cocos2d.h"
+#include "Runtime.h"
 
 using namespace CocosDenshion;
 
@@ -35,26 +36,8 @@ bool AppDelegate::applicationDidFinishLaunching()
     // set FPS. the default value is 1.0/60 if you don't call this
     director->setAnimationInterval(1.0 / 60);
 
-	director->getConsole()->listenOnTCP(5678);
-
-	extern std::vector<std::string> getSearchPath();
-	std::vector<std::string> searchPathArray;
-	searchPathArray = getSearchPath();
-	for (unsigned i = 0; i < searchPathArray.size(); i++)
-	{
-		FileUtils::getInstance()->addSearchPath(searchPathArray[i]);
-	}
-
-    // register lua engine
-    auto engine = LuaEngine::getInstance();
-    ScriptEngineManager::getInstance()->setScriptEngine(engine);
+    startRuntime();
     
-	//engine->executeString("require('debugger')('192.168.16.209')");
-	engine->executeString("require('debugger')()");
-
-    std::string path = FileUtils::getInstance()->fullPathForFilename("cocos2d-lua.lua");
-    engine->executeScriptFile(path.c_str());
-
     return true;
 }
 

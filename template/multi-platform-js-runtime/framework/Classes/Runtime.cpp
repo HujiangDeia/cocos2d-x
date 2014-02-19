@@ -343,17 +343,17 @@ public:
         addChild(label, 9999);
         label->setPosition( Point(VisibleRect::center().x, VisibleRect::top().y - 30) );
         
-        auto labelwait = LabelTTF::create("wait transfer file ...", "Arial", 22);
+        auto labelwait = LabelTTF::create("wait transfer files ...", "Arial", 22);
         addChild(labelwait, 10000);
         labelwait->setPosition( Point(VisibleRect::center().x, VisibleRect::center().y) );
         
-        // add close menu
-        string playmenu="play";
-        MenuItemFont::setFontSize(22);
-        auto playItem = MenuItemFont::create(playmenu, CC_CALLBACK_1(ConnectWaitLayer::playerCallback, this) );
-        auto menu =Menu::create(playItem, NULL);
+        
+        auto labelPlay = LabelTTF::create("play", "Arial", 20);
+        auto menuItem = MenuItemLabel::create(labelPlay, CC_CALLBACK_1(ConnectWaitLayer::playerCallback, this));
+        auto menu = Menu::create(menuItem, NULL);
+        
         menu->setPosition( Point::ZERO );
-        playItem->setPosition(Point( VisibleRect::right().x-playItem->getContentSize().width, VisibleRect::bottom().y+30));
+        menuItem->setPosition( Point( VisibleRect::right().x - 50, VisibleRect::bottom().y + 25) );
         addChild(menu, 1);
 		//_scheduler = CCDirector::sharedDirector()->getScheduler();
         scheduleUpdate();
@@ -655,7 +655,7 @@ public:
         cocos2d::Console *_console = Director::getInstance()->getConsole();
         static struct Console::Command commands[] = {
             {"shutdownapp","exit runtime app",std::bind(&ConsoleCustomCommand::onShutDownApp, this, std::placeholders::_1, std::placeholders::_2)},
-            {"precompile","",std::bind(&ConsoleCustomCommand::onPreCcompile, this, std::placeholders::_1, std::placeholders::_2)},
+            {"precompile","",std::bind(&ConsoleCustomCommand::onPreCompile, this, std::placeholders::_1, std::placeholders::_2)},
             {"start-logic","run game logic script",std::bind(&ConsoleCustomCommand::onRunLogicScript, this, std::placeholders::_1, std::placeholders::_2)},
             {"reload","reload script.Args:[filepath]",std::bind(&ConsoleCustomCommand::onReloadScriptFile, this, std::placeholders::_1, std::placeholders::_2)},
         };
@@ -674,9 +674,9 @@ public:
         }
     }
     
-    void onPreCcompile(int fd, const std::string &args)
+    void onPreCompile(int fd, const std::string &args)
     {
-        string jsSearchPath= getProjSearchPath();
+        string jsSearchPath= FileUtils::getInstance()->getWritablePath();
         vector<std::string> fileInfoList = searchFileList(jsSearchPath,"*.js","runtime|framework|");
         for (unsigned i = 0; i < fileInfoList.size(); i++)
         {
@@ -709,6 +709,7 @@ void startRuntime()
 	vector<string> searchPathArray;
     searchPathArray=FileUtils::getInstance()->getSearchPaths();
     vector<string> writePathArray;
+    CCLOG(FileUtils::getInstance()->getWritablePath().c_str());
     writePathArray.push_back(FileUtils::getInstance()->getWritablePath());
     FileUtils::getInstance()->setSearchPaths(writePathArray);
 	for (unsigned i = 0; i < searchPathArray.size(); i++)
@@ -721,7 +722,6 @@ void startRuntime()
 	ScriptEngineProtocol *engine = ScriptingCore::getInstance();
 	ScriptEngineManager::getInstance()->setScriptEngine(engine);
 	ScriptingCore::getInstance()->runScript("jsb.js");
-    
     
     auto scene = Scene::create();
     auto layer = new ConnectWaitLayer();

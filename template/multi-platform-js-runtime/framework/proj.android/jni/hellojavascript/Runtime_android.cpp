@@ -27,3 +27,7 @@ string getDotWaitFilePath()
 	dotwaitFile += "/.wait";
 	return dotwaitFile;
 }
+
+string getIPAddress()
+{
+}

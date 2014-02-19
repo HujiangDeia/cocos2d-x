@@ -171,11 +171,13 @@ xcopy /Y /Q "$(Configuration).win32\*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Classes\AppDelegate.h" />
+    <ClInclude Include="..\Classes\Runtime.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="SimulatorWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Classes\AppDelegate.cpp" />
+    <ClCompile Include="..\Classes\Runtime.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Runtime_win32.cpp" />
     <ClCompile Include="SimulatorWindow.cpp" />

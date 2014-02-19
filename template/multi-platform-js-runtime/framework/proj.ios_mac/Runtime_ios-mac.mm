@@ -30,16 +30,6 @@ string getDotWaitFilePath()
     return dotwaitFile;
 }
 
-//string getIPAddress1()
-//{
-//    NSHost* myhost =[NSHost currentHost];
-//    NSString *address = [myhost address];
-//    if (address != nil) {
-//        return [address UTF8String];
-//    }
-//    return "";
-//}
-
 string getIPAddress()
 {
     BOOL success;
