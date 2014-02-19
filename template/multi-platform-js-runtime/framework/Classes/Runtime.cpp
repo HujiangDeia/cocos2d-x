@@ -285,8 +285,318 @@ private:
 	string _jsSearchPath;
 };
 
+
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <io.h>
+#include <WS2tcpip.h>
+
+#define bzero(a, b) memset(a, 0, b);
+
+#else
+#include <netdb.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
+
+class  FileServer
+{
+public:
+    
+    FileServer()
+    {
+        _listenfd = -1;
+        _running = false;
+        _endThread = false;
+    }
+    
+	bool listenOnTCP(int port);
+    void stop();
+    
+private:
+    bool recv_file(int fd);
+    void addClient();
+    void loop();
+ 
+    // file descriptor: socket, console, etc.
+    int _listenfd;
+    int _maxfd;
+    std::vector<int> _fds;
+    std::thread _thread;
+    fd_set _read_set;
+    bool _running;
+    bool _endThread;
+};
+
+bool FileServer::listenOnTCP(int port)
+{
+	int listenfd, n;
+	const int on = 1;
+	struct addrinfo hints, *res, *ressave;
+	char serv[30];
+
+	snprintf(serv, sizeof(serv)-1, "%d", port );
+	serv[sizeof(serv)-1]=0;
+
+	bzero(&hints, sizeof(struct addrinfo));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_INET; // AF_UNSPEC: Do we need IPv6 ?
+	hints.ai_socktype = SOCK_STREAM;
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+	WSADATA wsaData;
+	n = WSAStartup(MAKEWORD(2, 2),&wsaData);
+#endif
+
+	if ( (n = getaddrinfo(NULL, serv, &hints, &res)) != 0) {
+		fprintf(stderr,"net_listen error for %s: %s", serv, gai_strerror(n));
+		return false;
+	}
+
+	ressave = res;
+	do {
+		listenfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (listenfd < 0)
+			continue;       /* error, try next one */
+		
+		setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof(on));
+		if (::bind(listenfd, res->ai_addr, res->ai_addrlen) == 0)
+			break;          /* success */
+		
+		close(listenfd);    /* bind error, close and try next one */
+	} while ( (res = res->ai_next) != NULL);
+
+	if (res == NULL) {
+		perror("net_listen:");
+		freeaddrinfo(ressave);
+		return false;
+	}
+
+	listen(listenfd, 1);
+
+	if (res->ai_family == AF_INET) 
+	{
+		char buf[INET_ADDRSTRLEN] = "";
+		struct sockaddr_in *sin = (struct sockaddr_in*) res->ai_addr;
+		if( inet_ntop(res->ai_family, &sin->sin_addr, buf, sizeof(buf)) != NULL )
+			cocos2d::log("Console: listening on  %s : %d", buf, ntohs(sin->sin_port));
+		else
+			perror("inet_ntop");
+	} else if (res->ai_family == AF_INET6) 
+	{
+		char buf[INET6_ADDRSTRLEN] = "";
+		struct sockaddr_in6 *sin = (struct sockaddr_in6*) res->ai_addr;
+		if( inet_ntop(res->ai_family, &sin->sin6_addr, buf, sizeof(buf)) != NULL )
+			cocos2d::log("Console: listening on  %s : %d", buf, ntohs(sin->sin6_port));
+		else
+			perror("inet_ntop");
+	}
+	freeaddrinfo(ressave);
+	_listenfd = listenfd;
+	_thread = std::thread( std::bind( &FileServer::loop, this) );
+	return true;	
+}
+	
+void FileServer::stop()
+{
+	if( _running ) {
+		_endThread = true;
+		_thread.join();
+	}
+}
+
+bool CreateDir(const char *sPathName)
+{
+	char   DirName[256]={0};
+	strcpy(DirName,   sPathName);
+	int   i,len   =   strlen(DirName);
+	if(DirName[len-1]!='/')
+		strcat(DirName,   "/");
+    
+	len   =   strlen(DirName);
+	for(i=1;   i<len;   i++)
+	{
+		if(DirName[i]=='/')
+		{
+			DirName[i]   =   0;
+			if(access(DirName,   NULL)!=0   )
+			{
+#ifdef _WIN32
+				if(mkdir(DirName/*,   0755*/)==-1)
+#else
+                if(mkdir(DirName,   0755)==-1)
+#endif
+                {
+                    perror("mkdir   error");
+                    return  false;
+                }
+			}  
+			DirName[i]   =   '/';  
+		}  
+	}  
+    
+	return   true;  
+}
+
+bool FileServer::recv_file(int fd)
+{
+	char buffer[1024]={0};
+    char namelen[4]={0};
+	if (read(fd, namelen, 4)<=0) {
+		return  false;
+	}
+    
+	if (read(fd, buffer, atoi(namelen))<=0) {
+		return  false;
+	}
+    
+    char fullfilename[1024]={0};
+    sprintf(fullfilename, "%s/%s",getProjSearchPath().c_str(),buffer);
+    string file(fullfilename);
+    CreateDir(file.substr(0,file.find_last_of("/")).c_str());
+	FILE *fp =fopen(fullfilename, "w");
+	
+	int length =0;
+	while ((length=read(fd, fullfilename, sizeof(fullfilename))) > 0) {
+		fwrite(fullfilename, sizeof(char), length,fp);
+	}
+	fclose(fp);
+	return true;
+}
+    
+void FileServer::addClient()
+{
+	struct sockaddr client;
+	socklen_t client_len;
+
+	/* new client */
+	client_len = sizeof( client );
+	int fd = accept(_listenfd, (struct sockaddr *)&client, &client_len );
+
+	// add fd to list of FD
+	if( fd != -1 ) {
+		FD_SET(fd, &_read_set);
+		_fds.push_back(fd);
+		_maxfd = std::max(_maxfd,fd);
+	}
+}
+
+void FileServer::loop()
+{
+	fd_set copy_set;
+	struct timeval timeout, timeout_copy;
+
+	_running = true;
+
+	FD_ZERO(&_read_set);
+	FD_SET(_listenfd, &_read_set);
+	_maxfd = _listenfd;
+
+	timeout.tv_sec = 0;
+
+	/* 0.016 seconds. Wake up once per frame at 60PFS */
+	timeout.tv_usec = 16000;
+
+	while(!_endThread) {
+
+		copy_set = _read_set;
+		timeout_copy = timeout;
+		int nready = select(_maxfd+1, &copy_set, NULL, NULL, &timeout_copy);
+
+		if( nready == -1 )
+		{
+			/* error */
+			if(errno != EINTR)
+				log("Abnormal error in select()\n");
+			continue;
+		}
+		else if( nready == 0 )
+		{
+			/* timeout. do somethig ? */
+		}
+		else
+		{
+			/* new client */
+			if(FD_ISSET(_listenfd, &copy_set)) {
+				addClient();
+				if(--nready <= 0)
+					continue;
+			}
+
+			/* data from client */
+			std::vector<int> to_remove;
+			for(const auto &fd: _fds) {
+				if(FD_ISSET(fd,&copy_set)) {
+					if( ! recv_file(fd) ) {
+						to_remove.push_back(fd);
+					}
+					if(--nready <= 0)
+						break;
+				}
+			}
+
+			/* remove closed conections */
+			for(int fd: to_remove) {
+				FD_CLR(fd, &_read_set);
+				_fds.erase(std::remove(_fds.begin(), _fds.end(), fd), _fds.end());
+			}
+		}
+	}
+
+	// clean up: ignore stdin, stdout and stderr
+	for(const auto &fd: _fds )
+		close(fd);
+	close(_listenfd);
+
+	_running = false;
+}
+
+
+
+
+class ConsoleCustomCommand
+{
+public:
+    ConsoleCustomCommand():_fileserver(nullptr)
+    {
+        
+        cocos2d::Console *_console = Director::getInstance()->getConsole();
+        static struct Console::Command commands[] = {
+            {"shutdownapp","exit runtime app",std::bind(&ConsoleCustomCommand::onShutDownApp, this, std::placeholders::_1, std::placeholders::_2)},
+        };
+        _console->setUserCommands(commands,sizeof(commands)/sizeof(Console::Command));
+        _console->listenOnTCP(5678);
+        
+        _fileserver=new FileServer();
+        _fileserver->listenOnTCP(6666);
+    }
+    ~ConsoleCustomCommand()
+    {
+        if (_fileserver) {
+            delete _fileserver;
+            _fileserver = nullptr;
+        }
+    }
+    void onPushFile(int fd, const std::string &args)
+    {
+        //printf(args.c_str());
+        //CCLOG(args.c_str());
+    }
+    
+    void onShutDownApp(int fd, const std::string &args)
+    {
+        exit(0);
+    }
+private:
+    FileServer* _fileserver;
+    
+};
+
 void startRuntime()
-{	
+{
+    static ConsoleCustomCommand s_customCommand;
 	vector<string> searchPathArray;
 	searchPathArray = getSearchPath();
 	for (unsigned i = 0; i < searchPathArray.size(); i++)
