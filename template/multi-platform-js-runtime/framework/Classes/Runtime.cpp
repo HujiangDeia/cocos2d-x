@@ -58,6 +58,9 @@ extern string getIPAddress();
 extern vector<string> getSearchPath();
 extern bool browseDir(const char *dir,const char *filespec,vector<string> &filterArray,vector<std::string> &fileList);
 
+bool g_startLogic=false;
+bool g_reloadScript=false;
+
 /*@brief   use "|" splite string  */
 vector<string> splitFilter(const char *str)
 {
@@ -227,6 +230,7 @@ vector<std::string> searchFileList(string &dir,const char *filespec="*.*",const 
 
 void startScript()
 {
+
 	ScriptEngineProtocol *engine = ScriptingCore::getInstance();
 	ScriptEngineManager::getInstance()->setScriptEngine(engine);
 	ScriptingCore::getInstance()->runScript("cocos2d-jsb.js");
@@ -330,21 +334,6 @@ class ConnectWaitLayer: public Layer
 {
 public:
 
-	void waitDebugConnect(void)
-	{
-		_jsSearchPath = getProjSearchPath();
-		vector<std::string> fileInfoList = searchFileList(_jsSearchPath,"*.js","runtime|framework|");
-		for (unsigned i = 0; i < fileInfoList.size(); i++)
-		{
-			ScriptingCore::getInstance()->compileScript(fileInfoList[i].substr(_jsSearchPath.length(),-1).c_str());
-		}
-	}
-    
-    void playerCallback(Object* sender)
-    {
-        startScript();
-    }
-
 	ConnectWaitLayer()
 	{
         string strip = getIPAddress();
@@ -360,18 +349,32 @@ public:
         
         // add close menu
         string playmenu="play";
+        MenuItemFont::setFontSize(22);
         auto playItem = MenuItemFont::create(playmenu, CC_CALLBACK_1(ConnectWaitLayer::playerCallback, this) );
-        playItem->setFontSize(22);
         auto menu =Menu::create(playItem, NULL);
         menu->setPosition( Point::ZERO );
         playItem->setPosition(Point( VisibleRect::right().x-playItem->getContentSize().width, VisibleRect::bottom().y+30));
         addChild(menu, 1);
 		//_scheduler = CCDirector::sharedDirector()->getScheduler();
+        scheduleUpdate();
 	}
-private:
-    cocos2d::Scheduler *_scheduler;
-	string _jsSearchPath;
     
+    void playerCallback(Object* sender)
+    {
+        startScript();
+    }
+
+    void update(float delta)
+    {
+        if (g_startLogic) {
+            startScript();
+            g_startLogic=false;
+        }
+        if (g_reloadScript) {
+            reloadScript();
+            g_reloadScript=false;
+        }
+    }
 };
 
 
@@ -652,8 +655,9 @@ public:
         cocos2d::Console *_console = Director::getInstance()->getConsole();
         static struct Console::Command commands[] = {
             {"shutdownapp","exit runtime app",std::bind(&ConsoleCustomCommand::onShutDownApp, this, std::placeholders::_1, std::placeholders::_2)},
+            {"precompile","",std::bind(&ConsoleCustomCommand::onPreCcompile, this, std::placeholders::_1, std::placeholders::_2)},
             {"start-logic","run game logic script",std::bind(&ConsoleCustomCommand::onRunLogicScript, this, std::placeholders::_1, std::placeholders::_2)},
-            {"reload","reload script.Args:[filepath]",std::bind(&ConsoleCustomCommand::onRunLogicScript, this, std::placeholders::_1, std::placeholders::_2)},
+            {"reload","reload script.Args:[filepath]",std::bind(&ConsoleCustomCommand::onReloadScriptFile, this, std::placeholders::_1, std::placeholders::_2)},
         };
         _console->setUserCommands(commands,sizeof(commands)/sizeof(Console::Command));
         _console->listenOnTCP(5678);
@@ -669,16 +673,25 @@ public:
             _fileserver = nullptr;
         }
     }
+    
+    void onPreCcompile(int fd, const std::string &args)
+    {
+        string jsSearchPath= getProjSearchPath();
+        vector<std::string> fileInfoList = searchFileList(jsSearchPath,"*.js","runtime|framework|");
+        for (unsigned i = 0; i < fileInfoList.size(); i++)
+        {
+            ScriptingCore::getInstance()->compileScript(fileInfoList[i].substr(jsSearchPath.length(),-1).c_str());
+        }
+    }
+    
     void onRunLogicScript(int fd, const std::string &args)
     {
-        //printf(args.c_str());
-        //CCLOG(args.c_str());
-        startScript();
+        g_startLogic=true;
     }
     
     void onReloadScriptFile(int fd,const std::string &args)
     {
-        reloadScript();
+        g_reloadScript=true;
     }
     
     void onShutDownApp(int fd, const std::string &args)

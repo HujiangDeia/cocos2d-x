@@ -152,7 +152,8 @@ class BuildRuntime:
             print ("Can't find Mac target")
             return False
 
-        macFolder = os.path.join(self.projectPath, "..", "..", "runtime", self.projectName, "mac")
+        name, ext = os.path.splitext(self.projectName)
+        macFolder = os.path.join(self.projectPath, "..", "..", "runtime", name, "mac")
         if os.path.isdir(macFolder):
             shutil.rmtree(macFolder)
 
@@ -240,7 +241,8 @@ class BuildRuntime:
             print ("Can't find iOS target")
             return False
 
-        iosFolder = os.path.join(self.projectPath, "..", "..", "runtime", self.projectName, "ios")
+        name, ext = os.path.splitext(self.projectName)
+        iosFolder = os.path.join(self.projectPath, "..", "..", "runtime", name, "ios")
         if os.path.isdir(iosFolder):
             filelist = os.listdir(iosFolder)
             for filename in filelist:
