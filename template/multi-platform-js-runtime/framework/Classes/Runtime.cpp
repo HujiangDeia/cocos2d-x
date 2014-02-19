@@ -33,7 +33,7 @@ THE SOFTWARE.
 #include "localstorage/js_bindings_system_registration.h"
 #include "chipmunk/js_bindings_chipmunk_registration.h"
 #include "jsb_opengl_registration.h"
-#include "CCScheduler.h"
+#include "cocos2d.h"
 
 #ifdef _WIN32
 #define realpath(dir,fuldir) _fullpath(fuldir,dir,_MAX_PATH_)
@@ -54,6 +54,7 @@ using namespace cocos2d;
 
 extern string getDotWaitFilePath();
 extern string getProjSearchPath();
+extern string getIPAddress();
 extern vector<string> getSearchPath();
 extern bool browseDir(const char *dir,const char *filespec,vector<string> &filterArray,vector<std::string> &fileList);
 
@@ -236,53 +237,141 @@ void reloadScript()
     
 }
 
-class ConnectWaiter: public Object
+
+class VisibleRect
 {
 public:
-	static ConnectWaiter& getInstance()
-	{
-		static ConnectWaiter instance;
-		return instance;
-	}
-	void updateConnect(float delta)
-	{
-		FileUtils::getInstance()->purgeCachedEntries();
-		if (!FileUtils::getInstance()->isFileExist(_dotwaitFile))
-		{
-			_scheduler->unscheduleSelector(SEL_SCHEDULE(&ConnectWaiter::updateConnect),this);
-			startScript();	
-		}
-	}
+    static Rect getVisibleRect();
+    
+    static Point left();
+    static Point right();
+    static Point top();
+    static Point bottom();
+    static Point center();
+    static Point leftTop();
+    static Point rightTop();
+    static Point leftBottom();
+    static Point rightBottom();
+private:
+    static void lazyInit();
+    static Rect s_visibleRect;
+};
+
+Rect VisibleRect::s_visibleRect;
+
+void VisibleRect::lazyInit()
+{
+    // no lazy init
+    // Useful if we change the resolution in runtime
+    s_visibleRect = Director::getInstance()->getOpenGLView()->getVisibleRect();
+}
+
+Rect VisibleRect::getVisibleRect()
+{
+    lazyInit();
+    return s_visibleRect;
+}
+
+Point VisibleRect::left()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x, s_visibleRect.origin.y+s_visibleRect.size.height/2);
+}
+
+Point VisibleRect::right()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width, s_visibleRect.origin.y+s_visibleRect.size.height/2);
+}
+
+Point VisibleRect::top()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width/2, s_visibleRect.origin.y+s_visibleRect.size.height);
+}
+
+Point VisibleRect::bottom()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width/2, s_visibleRect.origin.y);
+}
+
+Point VisibleRect::center()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width/2, s_visibleRect.origin.y+s_visibleRect.size.height/2);
+}
+
+Point VisibleRect::leftTop()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x, s_visibleRect.origin.y+s_visibleRect.size.height);
+}
+
+Point VisibleRect::rightTop()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width, s_visibleRect.origin.y+s_visibleRect.size.height);
+}
+
+Point VisibleRect::leftBottom()
+{
+    lazyInit();
+    return s_visibleRect.origin;
+}
+
+Point VisibleRect::rightBottom()
+{
+    lazyInit();
+    return Point(s_visibleRect.origin.x+s_visibleRect.size.width, s_visibleRect.origin.y);
+}
+
+class ConnectWaitLayer: public Layer
+{
+public:
+
 	void waitDebugConnect(void)
 	{
-		_dotwaitFile = getDotWaitFilePath();
 		_jsSearchPath = getProjSearchPath();
 		vector<std::string> fileInfoList = searchFileList(_jsSearchPath,"*.js","runtime|framework|");
 		for (unsigned i = 0; i < fileInfoList.size(); i++)
 		{
 			ScriptingCore::getInstance()->compileScript(fileInfoList[i].substr(_jsSearchPath.length(),-1).c_str());
 		}
+	}
+    
+    void playerCallback(Object* sender)
+    {
+        startScript();
+    }
 
-		if (!FileUtils::getInstance()->isFileExist(_dotwaitFile))
-		{
-			startScript();
-			return;
-		}
-
-		if (_scheduler)
-		{
-			_scheduler->scheduleSelector(SEL_SCHEDULE(&ConnectWaiter::updateConnect), this,0.5f, false);
-		}
+	ConnectWaitLayer()
+	{
+        string strip = getIPAddress();
+        char szIPAddress[512]={0};
+        sprintf(szIPAddress, "LocalIP: %s",strip.c_str());
+        auto label = LabelTTF::create(szIPAddress, "Arial", 24);
+        addChild(label, 9999);
+        label->setPosition( Point(VisibleRect::center().x, VisibleRect::top().y - 30) );
+        
+        auto labelwait = LabelTTF::create("wait transfer file ...", "Arial", 22);
+        addChild(labelwait, 10000);
+        labelwait->setPosition( Point(VisibleRect::center().x, VisibleRect::center().y) );
+        
+        // add close menu
+        string playmenu="play";
+        auto playItem = MenuItemFont::create(playmenu, CC_CALLBACK_1(ConnectWaitLayer::playerCallback, this) );
+        playItem->setFontSize(22);
+        auto menu =Menu::create(playItem, NULL);
+        menu->setPosition( Point::ZERO );
+        playItem->setPosition(Point( VisibleRect::right().x-playItem->getContentSize().width, VisibleRect::bottom().y+30));
+        addChild(menu, 1);
+		//_scheduler = CCDirector::sharedDirector()->getScheduler();
 	}
 private:
-	ConnectWaiter()
-	{
-		_scheduler = CCDirector::sharedDirector()->getScheduler();
-	}
-
-	cocos2d::Scheduler *_scheduler;
-	string _dotwaitFile;
+    cocos2d::Scheduler *_scheduler;
 	string _jsSearchPath;
+    
 };
 
 
@@ -453,7 +542,7 @@ bool FileServer::recv_file(int fd)
 	}
     
     char fullfilename[1024]={0};
-    sprintf(fullfilename, "%s/%s",getProjSearchPath().c_str(),buffer);
+    sprintf(fullfilename, "%s/%s", FileUtils::getInstance()->getWritablePath().c_str(),buffer);
     string file(fullfilename);
     CreateDir(file.substr(0,file.find_last_of("/")).c_str());
 	FILE *fp =fopen(fullfilename, "w");
@@ -554,8 +643,6 @@ void FileServer::loop()
 }
 
 
-
-
 class ConsoleCustomCommand
 {
 public:
@@ -565,6 +652,8 @@ public:
         cocos2d::Console *_console = Director::getInstance()->getConsole();
         static struct Console::Command commands[] = {
             {"shutdownapp","exit runtime app",std::bind(&ConsoleCustomCommand::onShutDownApp, this, std::placeholders::_1, std::placeholders::_2)},
+            {"start-logic","run game logic script",std::bind(&ConsoleCustomCommand::onRunLogicScript, this, std::placeholders::_1, std::placeholders::_2)},
+            {"reload","reload script.Args:[filepath]",std::bind(&ConsoleCustomCommand::onRunLogicScript, this, std::placeholders::_1, std::placeholders::_2)},
         };
         _console->setUserCommands(commands,sizeof(commands)/sizeof(Console::Command));
         _console->listenOnTCP(5678);
@@ -574,15 +663,22 @@ public:
     }
     ~ConsoleCustomCommand()
     {
+        _fileserver->stop();
         if (_fileserver) {
             delete _fileserver;
             _fileserver = nullptr;
         }
     }
-    void onPushFile(int fd, const std::string &args)
+    void onRunLogicScript(int fd, const std::string &args)
     {
         //printf(args.c_str());
         //CCLOG(args.c_str());
+        startScript();
+    }
+    
+    void onReloadScriptFile(int fd,const std::string &args)
+    {
+        reloadScript();
     }
     
     void onShutDownApp(int fd, const std::string &args)
@@ -598,7 +694,10 @@ void startRuntime()
 {
     static ConsoleCustomCommand s_customCommand;
 	vector<string> searchPathArray;
-	searchPathArray = getSearchPath();
+    searchPathArray=FileUtils::getInstance()->getSearchPaths();
+    vector<string> writePathArray;
+    writePathArray.push_back(FileUtils::getInstance()->getWritablePath());
+    FileUtils::getInstance()->setSearchPaths(writePathArray);
 	for (unsigned i = 0; i < searchPathArray.size(); i++)
 	{
 		FileUtils::getInstance()->addSearchPath(searchPathArray[i]);
@@ -609,14 +708,21 @@ void startRuntime()
 	ScriptEngineProtocol *engine = ScriptingCore::getInstance();
 	ScriptEngineManager::getInstance()->setScriptEngine(engine);
 	ScriptingCore::getInstance()->runScript("jsb.js");
-	ConnectWaiter::getInstance().waitDebugConnect();
+    
+    
+    auto scene = Scene::create();
+    auto layer = new ConnectWaitLayer();
+    layer->autorelease();
+    auto director = Director::getInstance();
+    scene->addChild(layer);
+    director->runWithScene(scene);
+    
+	//ConnectWaiter::getInstance().waitDebugConnect();
 #else
 	ScriptingCore::getInstance()->start();
 	startScript();
 #endif
 }
-
-
 
 
 // SimulatorConfig
