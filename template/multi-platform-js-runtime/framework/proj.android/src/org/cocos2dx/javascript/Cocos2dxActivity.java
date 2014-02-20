@@ -1,7 +1,14 @@
 package org.cocos2dx.javascript;
 
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+
 import android.app.NativeActivity;
 import android.os.Bundle;
+import android.os.Environment;
+import android.util.Log;
 
 public class Cocos2dxActivity extends NativeActivity{
 
@@ -29,4 +36,31 @@ public class Cocos2dxActivity extends NativeActivity{
 		// getWindow().setFormat(PixelFormat.TRANSLUCENT);
 		
 	}
+
+	public static String getLocalIpAddress() {
+		try {
+			for (Enumeration<NetworkInterface> en = NetworkInterface
+					.getNetworkInterfaces(); en.hasMoreElements();) {
+				NetworkInterface intf = en.nextElement();
+				for (Enumeration<InetAddress> enumIpAddr = intf
+						.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+					InetAddress inetAddress = enumIpAddr.nextElement();
+					if (!inetAddress.isLoopbackAddress()) {
+						return inetAddress.getHostAddress().toString();
+					}
+				}
+			}
+		} catch (SocketException ex) {
+			Log.e("WifiPreference IpAddress", ex.toString());
+		}
+		return null;
+	}
+	
+	public static String getSDCardPath() {
+		if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {  
+           return  Environment.getExternalStorageDirectory().getPath();
+		}
+		return null;
+	}
+	
 }

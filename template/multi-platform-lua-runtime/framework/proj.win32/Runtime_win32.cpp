@@ -9,7 +9,7 @@
 using namespace std;
 
 
-string getProSearchPath()
+string getProjSearchPath()
 {
 	extern std::string getCurAppPath(void);
 	string searchPath = getCurAppPath();
@@ -25,7 +25,11 @@ vector<string> getSearchPath()
 	vector<string> searchPathArray;
 	string searchPathRes = getCurAppPath();
 	searchPathRes += "/Resources";
-	searchPathArray.push_back(getProSearchPath());
+	searchPathArray.push_back(getProjSearchPath());
 	searchPathArray.push_back(searchPathRes);
 	return searchPathArray;
+}
+
+string getIPAddress()
+{
 }
