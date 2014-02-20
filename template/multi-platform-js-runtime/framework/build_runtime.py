@@ -55,33 +55,74 @@ def checkParams():
         help="parameter for copy resource"
     )
 
+    parser.add_option(
+        "-d",
+        "--dest",
+        metavar="PROJECT_PATH",
+        help="Set project path"
+    )
+
+    #android's parameter
+    parser.add_option(
+        "-v",
+        "--version",
+        metavar="SDK_VERSION",
+        help="Set android sdk version"
+    )
+
+    #ios's parameter
+    parser.add_option(
+        "-t",
+        "--target",
+        metavar="TARGET",
+        help="Set target"
+    )
+
     # parse the params
     (opts, args) = parser.parse_args()
+
     if not opts.platform:
         parser.error("-p or --platform is not specified")
-    if not opts.pure:
-        return opts.platform, None
-    return opts.platform, opts.pure
+
+    if opts.platform == "android":
+        if not opts.version:
+            parser.error("-v or --version is not specified")
+        return opts
+
+    if opts.platform == "ios":
+        if not opts.target:
+            parser.error("-t or --target is not specified")
+        return opts
+
+    #return opts.platform, opts.pure
 
 
 class BuildRuntime:
     
-    def __init__(self, platform, pure):
-        self.projectPath = None
+    def __init__(self, parameters):
+        self.projectPath = parameters.dest
         self.projectName = None
-        self.runtimePlatform = platform
-        self.pure = pure
-        
+        self.runtimePlatform = parameters.platform
+        self.pure = parameters.pure
+
         scriptPath = os.path.abspath(os.path.dirname(__file__))
-        if platform == 'win32':
+        if self.runtimePlatform == 'win32':
             self.projectPath = os.path.join(scriptPath, "proj.win32")
-        elif platform == 'android':
-            self.projectPath = os.path.join(scriptPath, "proj.android")
-        elif platform == 'ios':
-            self.projectPath = os.path.join(scriptPath, "proj.ios_mac")
-        elif platform == 'mac':
-            self.projectPath = os.path.join(scriptPath, "proj.ios_mac")
-        
+        elif self.runtimePlatform == 'android':
+            self.version = parameters.version
+            if "android-" in self.version:
+                self.version = self.version[self.version.find('-')+1:]
+            if self.projectPath is None:
+                self.projectPath = os.path.join(scriptPath, "proj.android")
+        elif self.runtimePlatform == 'ios':
+            self.target = parameters.target
+            if self.projectPath is None:
+                self.projectPath = os.path.join(scriptPath, "proj.ios_mac")
+        elif self.runtimePlatform == 'mac':
+            self.target = parameters.target
+            if self.projectPath is None:
+                self.projectPath = os.path.join(scriptPath, "proj.ios_mac")
+
     def buildRuntime(self):
         if self.runtimePlatform == 'win32':
             self.win32Runtime()
@@ -285,39 +326,45 @@ class BuildRuntime:
             print ("ANDROID_SDK_ROOT not defined.\
              Please define ANDROID_SDK_ROOT in your environment")
             return False
-        
         try:
             NDK_ROOT = os.environ['NDK_ROOT']
         except Exception:
             print ("NDK_ROOT not defined.\
              Please define NDK_ROOT in your environment")
             return False
-        
         platformsPath = os.path.join(SDK_ROOT,"platforms")
         if not os.path.isdir(platformsPath):
             print ("Can't find android platforms")
             return False
-        
         platforms = os.listdir(platformsPath)
         versions = []
-        for platform in platforms:
-            if "android-" in platform:
-                version = platform[platform.find('-')+1:]
-                versions.append(version)
+        exsit = False
+        for p in platforms:
+            if "android-" in p:
+                if self.version in p:
+                    exsit = True
+                ver = p[p.find('-')+1:]
+                versions.append(ver)
+        if not exsit:
+            print ("Unable to find the sdk version.")
+            return False
+        if float(self.version) <= 10.0:
+            print ("The android sdk version you designated is too old.\
+             Please upgrade to the latest version or designate a new android sdk version")
             
         maxVersion = max(map(float, versions))
         if maxVersion <= 10.0:
-            print ("Update android sdk please")
+            print ("Update android sdk")
             return False
         
         buildNative = os.path.join(self.projectPath, "build_native.py")
         if not os.path.isdir(self.projectPath) or not os.path.isfile(buildNative):
             print ("Can't find the build_native.py")
             return False
-        
+
         sys.path.append(self.projectPath)
         from build_native import build
-        build(None, str(int(maxVersion)), None, self.pure)
+        build(None, self.version, None, self.pure)
         
     def win32Runtime(self):
         try:
@@ -414,6 +461,6 @@ class BuildRuntime:
         return False
                 
 if __name__ == '__main__':
-    platform, pure = checkParams();
-    buildRuntime = BuildRuntime(platform, pure)
+    parameters = checkParams();
+    buildRuntime = BuildRuntime(parameters)
     buildRuntime.buildRuntime()
