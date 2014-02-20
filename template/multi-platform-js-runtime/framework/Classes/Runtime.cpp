@@ -37,6 +37,7 @@ THE SOFTWARE.
 
 #ifdef _WIN32
 #define realpath(dir,fuldir) _fullpath(fuldir,dir,_MAX_PATH_)
+#include <direct.h>
 #else
 #include <unistd.h>
 #include <limits.h>
@@ -58,8 +59,6 @@ extern string getIPAddress();
 extern vector<string> getSearchPath();
 extern bool browseDir(const char *dir,const char *filespec,vector<string> &filterArray,vector<std::string> &fileList);
 
-bool g_startLogic=false;
-bool g_reloadScript=false;
 
 /*@brief   use "|" splite string  */
 vector<string> splitFilter(const char *str)
@@ -356,7 +355,7 @@ public:
         menuItem->setPosition( Point( VisibleRect::right().x - 50, VisibleRect::bottom().y + 25) );
         addChild(menu, 1);
 		//_scheduler = CCDirector::sharedDirector()->getScheduler();
-        scheduleUpdate();
+        //scheduleUpdate();
 	}
     
     void playerCallback(Object* sender)
@@ -364,17 +363,6 @@ public:
         startScript();
     }
 
-    void update(float delta)
-    {
-        if (g_startLogic) {
-            startScript();
-            g_startLogic=false;
-        }
-        if (g_reloadScript) {
-            reloadScript();
-            g_reloadScript=false;
-        }
-    }
 };
 
 
@@ -676,27 +664,35 @@ public:
     
     void onPreCompile(int fd, const std::string &args)
     {
-        string jsSearchPath= FileUtils::getInstance()->getWritablePath();
-        vector<std::string> fileInfoList = searchFileList(jsSearchPath,"*.js","runtime|framework|");
-        for (unsigned i = 0; i < fileInfoList.size(); i++)
-        {
-            ScriptingCore::getInstance()->compileScript(fileInfoList[i].substr(jsSearchPath.length(),-1).c_str());
-        }
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([](){
+            string jsSearchPath= FileUtils::getInstance()->getWritablePath();
+            vector<std::string> fileInfoList = searchFileList(jsSearchPath,"*.js","runtime|framework|");
+            for (unsigned i = 0; i < fileInfoList.size(); i++)
+            {
+                ScriptingCore::getInstance()->compileScript(fileInfoList[i].substr(jsSearchPath.length(),-1).c_str());
+            }
+        });
     }
     
     void onRunLogicScript(int fd, const std::string &args)
     {
-        g_startLogic=true;
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([](){
+            startScript();
+        });
     }
     
     void onReloadScriptFile(int fd,const std::string &args)
     {
-        g_reloadScript=true;
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([](){
+             reloadScript();
+        });
     }
     
     void onShutDownApp(int fd, const std::string &args)
     {
-        exit(0);
+        Director::getInstance()->getScheduler()->performFunctionInCocosThread([](){
+            exit(0);
+        });
     }
 private:
     FileServer* _fileserver;
@@ -709,7 +705,7 @@ void startRuntime()
 	vector<string> searchPathArray;
     searchPathArray=FileUtils::getInstance()->getSearchPaths();
     vector<string> writePathArray;
-    CCLOG(FileUtils::getInstance()->getWritablePath().c_str());
+    //CCLOG(FileUtils::getInstance()->getWritablePath().c_str());
     writePathArray.push_back(FileUtils::getInstance()->getWritablePath());
     FileUtils::getInstance()->setSearchPaths(writePathArray);
 	for (unsigned i = 0; i < searchPathArray.size(); i++)

@@ -120,4 +120,5 @@ string getDotWaitFilePath()
 
 string getIPAddress()
 {
+	return "";
 }
